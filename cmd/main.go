@@ -1,6 +1,6 @@
 package main
 
-import "ichat/app"
+import "ichat/internal/app"
 
 func main() {
 	app := app.New()
