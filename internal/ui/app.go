@@ -2,8 +2,8 @@ package ui
 
 import (
 	"fmt"
+	chatdomain "ichat/internal/domain/chat"
 	"ichat/internal/service"
-	chatdomain "ichat/internal/service/domain/chat"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -135,18 +135,20 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 	mainMenuBtn := widget.NewButton("Main Menu", func() {
 		a.showMainMenu(w)
 	})
-	chats := []chatdomain.Chat{
-		{ID: "chat1", Name: "Chat 1"},
-		{ID: "chat2", Name: "Chat 2"},
-		{ID: "chat3", Name: "Chat 3"},
-	} // Example chat list
+	chats, err := a.srv.GetChats()
+	if err != nil {
+		fmt.Printf("Error Get Chats: %v\n", err.Error())
+		dialog.ShowInformation("Error", "Unable to load chats", w)
+		return
+	}
+
 	chatList := container.NewVBox()
 
 	for _, chat := range chats {
 		chatItem := container.NewHBox(
 			widget.NewButton(chat.Name, func() {
 				// Logic to open the chat screen can be added here
-				a.showChatScreen(w, chat.ID)
+				a.showChatScreen(w, chat)
 			}),
 		)
 		chatList.Add(chatItem)
@@ -165,14 +167,24 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 	w.SetContent(content)
 }
 
-func (a *UI) showChatScreen(w fyne.Window, chatID string) {
+func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
+	a.srv.Connect()
+	defer a.srv.Close()
+	
 	// Top info
-	chat := chatdomain.Chat{ // Example chat data
-		ID:      "chat1",
-		Name:    "Chat 1",
-		Members: []chatdomain.Member{{Name: "Alice"}, {Name: "Bob"}},
-	}
-
+	msgList := container.NewVBox()
+	// Example initial message
+	msgList.Add(widget.NewLabel("System: Welcome to the chat"))
+	go func() {
+		msg, err := a.srv.ReceiveMessages(chat.ID)
+		if err != nil {
+			fmt.Printf("Error receiving messages: %v\n", err)
+			return
+		}
+		for msg := range msg {
+			msgList.Add(widget.NewLabel(fmt.Sprintf("%s: %s", msg.SenderID, msg.Content)))
+		}
+	}()
 	chatTitle := widget.NewLabel(chat.Name)
 	chatTitle.Alignment = fyne.TextAlignCenter
 	chatTitle.TextStyle = fyne.TextStyle{Bold: true}
@@ -185,11 +197,6 @@ func (a *UI) showChatScreen(w fyne.Window, chatID string) {
 	})
 
 	top := container.NewBorder(nil, nil, backBtn, nil, container.NewVBox(chatTitle, chatInfo))
-
-	// Messages list
-	msgList := container.NewVBox()
-	// Example initial message
-	msgList.Add(widget.NewLabel("System: Welcome to the chat"))
 
 	scroll := container.NewVScroll(msgList)
 	scroll.SetMinSize(fyne.NewSize(400, 300))
@@ -219,8 +226,11 @@ func (a *UI) showChatScreen(w fyne.Window, chatID string) {
 		if a.srv != nil {
 			// non-blocking send; adjust per real service API
 			go func(t string) {
-				_ = a.srv // placeholder: integrate with a.srv.SendMessage(...) if available
-				_ = t
+				a.srv.SendMessage(chatdomain.Message{
+					SenderID: "current_user_id", // replace with actual user ID
+					Content:  t,
+					ChatID:   chat.ID,
+				})
 			}(text)
 		}
 	}
