@@ -4,6 +4,7 @@ import (
 	"fmt"
 	chatdomain "ichat/internal/domain/chat"
 	"ichat/internal/service"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -43,10 +44,16 @@ func (a *UI) Start() {
 	myWindow.Resize(fyne.NewSize(800, 600))
 	a.showEnterScreen(myWindow)
 
+	err := a.srv.Connect()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	myWindow.ShowAndRun()
 }
 
 func (a *UI) Close(w fyne.Window) {
+	a.srv.Close()
 	a.app.Quit()
 }
 
@@ -168,9 +175,18 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 }
 
 func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
-	a.srv.Connect()
-	defer a.srv.Close()
-	
+	joinMsg := chatdomain.Message{
+		SenderID: "current_user_id",
+		ChatID:   chat.ID,
+		Action:   string(chatdomain.ActionJoinChat),
+	}
+	err := a.srv.SendMessage(joinMsg)
+	if err != nil {
+		dialog.ShowInformation("Error", "Enter connecting chat", w)
+		a.showChatsListScreen(w)
+		return
+	}
+
 	// Top info
 	msgList := container.NewVBox()
 	// Example initial message
@@ -185,6 +201,7 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 			msgList.Add(widget.NewLabel(fmt.Sprintf("%s: %s", msg.SenderID, msg.Content)))
 		}
 	}()
+
 	chatTitle := widget.NewLabel(chat.Name)
 	chatTitle.Alignment = fyne.TextAlignCenter
 	chatTitle.TextStyle = fyne.TextStyle{Bold: true}
@@ -193,6 +210,17 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 	chatInfo.Alignment = fyne.TextAlignCenter
 
 	backBtn := widget.NewButton("← Back", func() {
+		leaveMsg := chatdomain.Message{
+			SenderID: "current_user_id",
+			ChatID:   chat.ID,
+			Action:   string(chatdomain.ActionLeaveChat),
+		}
+		err := a.srv.SendMessage(leaveMsg)
+		if err != nil {
+			dialog.ShowInformation("Error", "Enter connecting chat", w)
+			a.showChatsListScreen(w)
+			return
+		}
 		a.showChatsListScreen(w)
 	})
 
@@ -230,6 +258,7 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 					SenderID: "current_user_id", // replace with actual user ID
 					Content:  t,
 					ChatID:   chat.ID,
+					Action:   string(chatdomain.ActionSendText),
 				})
 			}(text)
 		}
