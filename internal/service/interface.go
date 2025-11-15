@@ -8,6 +8,7 @@ type ChatService interface {
 	SendMessage(msg chatdomain.Message) error
 	ReceiveMessages(chatID string) (<-chan *chatdomain.Message, error)
 	GetChats() ([]*chatdomain.Chat, error)
+	CreateChat(name string) error
 }
 
 type AuthService interface {

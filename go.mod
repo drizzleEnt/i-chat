@@ -2,7 +2,10 @@ module ichat
 
 go 1.25.3
 
-require fyne.io/fyne/v2 v2.7.0
+require (
+	fyne.io/fyne/v2 v2.7.0
+	golang.org/x/net v0.47.0
+)
 
 require (
 	fyne.io/systray v1.11.1-0.20250603113521-ca66a66d8b58 // indirect
@@ -33,7 +36,6 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
 	golang.org/x/image v0.33.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

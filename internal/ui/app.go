@@ -142,6 +142,11 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 	mainMenuBtn := widget.NewButton("Main Menu", func() {
 		a.showMainMenu(w)
 	})
+
+	createChatButton := widget.NewButton("Create Chat", func() {
+		a.showCreateChatScreen(w)
+	})
+
 	chats, err := a.srv.GetChats()
 	if err != nil {
 		fmt.Printf("Error Get Chats: %v\n", err.Error())
@@ -163,7 +168,9 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 
 	scrollContainer := container.NewScroll(chatList)
 	content := container.NewBorder(
-		nil,         // top
+		container.NewStack(
+			createChatButton,
+		), // top
 		mainMenuBtn, // bottom
 		nil,         // left
 		nil,         // right
@@ -171,6 +178,28 @@ func (a *UI) showChatsListScreen(w fyne.Window) {
 			widget.NewCard("Chats", "", scrollContainer),
 		),
 	)
+	w.SetContent(content)
+}
+
+func (a *UI) showCreateChatScreen(w fyne.Window) {
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("Enter chat name")
+
+	btn := widget.NewButton("Create", func() {
+		name := entry.Text
+		if name == "" {
+			dialog.ShowInformation("Error", "Enter chat name", w)
+			return
+		}
+		a.srv.CreateChat(name)
+		a.showChatsListScreen(w)
+	})
+
+	content := container.NewVBox(
+		entry,
+		btn,
+	)
+
 	w.SetContent(content)
 }
 

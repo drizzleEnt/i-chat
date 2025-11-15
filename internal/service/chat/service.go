@@ -1,6 +1,7 @@
 package chatsrv
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	chatdomain "ichat/internal/domain/chat"
@@ -16,25 +17,56 @@ var _ service.ChatService = (*connAdapter)(nil)
 
 func NewConnAdapter() service.ChatService {
 	c := connAdapter{}
-
+	c.baseURL = url.URL{
+		Scheme: "http",
+		Host:   "0.0.0.0:8181",
+	}
 	c.client = &http.Client{}
 	return &c
 }
 
 type connAdapter struct {
-	client *http.Client
-	ws     *websocket.Conn
+	baseURL url.URL
+	client  *http.Client
+	ws      *websocket.Conn
+}
+
+// CreateChat implements service.ChatService.
+func (c *connAdapter) CreateChat(name string) error {
+	url := c.baseURL
+	url.Path = "/chats"
+
+	jsonData := map[string]string{
+		"name": name,
+	}
+	jsonDataBytes, err := json.Marshal(jsonData)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url.String(), bytes.NewBuffer(jsonDataBytes))
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed creating chat, status code: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // GetChats implements service.ChatService.
 func (c *connAdapter) GetChats() ([]*chatdomain.Chat, error) {
-	url := url.URL{
-		Scheme: "http",
-		Host:   "0.0.0.0:8181",
-		Path:   "/chats",
-	}
+	url := c.baseURL
+	url.Path = "/chats"
 
-	req, err := http.NewRequest("GET", url.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
 	if err != nil {
 		return nil, err
 	}
