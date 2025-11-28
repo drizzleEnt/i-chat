@@ -1,9 +1,13 @@
 package main
 
-import "ichat/internal/app"
+import (
+	"context"
+	"ichat/internal/app"
+)
 
 func main() {
+	ctx := context.Background()
 	app := app.New()
 
-	app.Run()
+	app.Run(ctx)
 }

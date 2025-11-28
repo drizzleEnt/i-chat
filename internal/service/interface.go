@@ -1,9 +1,12 @@
 package service
 
-import chatdomain "ichat/internal/domain/chat"
+import (
+	"context"
+	chatdomain "ichat/internal/domain/chat"
+)
 
 type ChatService interface {
-	Connect() error
+	Connect(ctx context.Context) ( error)
 	Close() error
 	SendMessage(msg chatdomain.Message) error
 	ReceiveMessages(chatID string) (<-chan *chatdomain.Message, error)

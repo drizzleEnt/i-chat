@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	chatdomain "ichat/internal/domain/chat"
 	"ichat/internal/service"
@@ -38,13 +39,13 @@ func New(opts ...Option) *UI {
 	return ui
 }
 
-func (a *UI) Start() {
-	myWindow := a.app.NewWindow("Chat App")
+func (a *UI) Start(ctx context.Context) {
+	myWindow := a.app.NewWindow("LIZZARD")
 	myWindow.CenterOnScreen()
 	myWindow.Resize(fyne.NewSize(800, 600))
 	a.showEnterScreen(myWindow)
 
-	err := a.srv.Connect()
+	err := a.srv.Connect(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,6 +60,10 @@ func (a *UI) Close(w fyne.Window) {
 
 func (a *UI) showEnterScreen(w fyne.Window) {
 	a.showLoginScreen(w)
+}
+
+func (a *UI) showLoadingScreen(w fyne.Window){
+	
 }
 
 func (a *UI) showMainMenu(w fyne.Window) {

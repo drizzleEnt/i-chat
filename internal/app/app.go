@@ -1,13 +1,14 @@
 package app
 
 import (
+	"context"
 	"ichat/internal/service"
 	chatsrv "ichat/internal/service/chat"
 	"ichat/internal/ui"
 )
 
 type App struct {
-	ui *ui.UI
+	ui      *ui.UI
 	chatSrv service.ChatService
 }
 
@@ -16,8 +17,8 @@ func New() *App {
 	return a
 }
 
-func (a *App) Run() error {
-	a.getUI().Start()
+func (a *App) Run(ctx context.Context) error {
+	a.getUI().Start(ctx)
 	return nil
 }
 

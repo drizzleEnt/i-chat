@@ -2,6 +2,7 @@ package chatsrv
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	chatdomain "ichat/internal/domain/chat"
@@ -9,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -100,7 +103,7 @@ func (c *connAdapter) Close() error {
 }
 
 // Connect implements service.ChatService.
-func (c *connAdapter) Connect() error {
+func (c *connAdapter) Connect(ctx context.Context) error {
 	fmt.Println("connect")
 	wsURL := url.URL{
 		Scheme: "ws",
@@ -108,11 +111,34 @@ func (c *connAdapter) Connect() error {
 		Path:   "/ws",
 	}
 
-	ws, err := websocket.Dial(wsURL.String(), "", "http://0.0.0.0:8181")
-	if err != nil {
-		// handle error appropriately, for now just panic
-		panic(err)
-	}
+	var ws *websocket.Conn
+	var connErr error
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		//initial connection
+		ws, connErr = websocket.Dial(wsURL.String(), "", "http://0.0.0.0:8181")
+		if connErr == nil {
+			return
+		}
+
+		ticker := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Println("try connect")
+				ws, connErr = websocket.Dial(wsURL.String(), "", "http://0.0.0.0:8181")
+				if connErr == nil {
+					return 
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
 	c.ws = ws
 	return nil
 }
