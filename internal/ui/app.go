@@ -62,8 +62,8 @@ func (a *UI) showEnterScreen(w fyne.Window) {
 	a.showLoginScreen(w)
 }
 
-func (a *UI) showLoadingScreen(w fyne.Window){
-	
+func (a *UI) showLoadingScreen(w fyne.Window) {
+
 }
 
 func (a *UI) showMainMenu(w fyne.Window) {
@@ -190,18 +190,38 @@ func (a *UI) showCreateChatScreen(w fyne.Window) {
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("Enter chat name")
 
+	chatTypes := []string{"Private", "Group", "Public"}
+	selectedType := "Private"
+
+	selectWidget := widget.NewSelect(chatTypes, func(value string) {
+		selectedType = value
+	})
+
 	btn := widget.NewButton("Create", func() {
 		name := entry.Text
 		if name == "" {
 			dialog.ShowInformation("Error", "Enter chat name", w)
 			return
 		}
-		a.srv.CreateChat(name)
+
+		var chatType int
+		switch selectedType {
+		case "Private":
+			chatType = 0
+		case "Group":
+			chatType = 2
+		case "Public":
+			chatType = 2
+		}
+
+		a.srv.CreateChat(chatType, name)
 		a.showChatsListScreen(w)
 	})
 
 	content := container.NewVBox(
 		entry,
+		widget.NewLabel("Chat type:"),
+		selectWidget,
 		btn,
 	)
 

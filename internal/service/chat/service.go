@@ -34,14 +34,21 @@ type connAdapter struct {
 	ws      *websocket.Conn
 }
 
-// CreateChat implements service.ChatService.
-func (c *connAdapter) CreateChat(name string) error {
-	url := c.baseURL
-	url.Path = "/chats"
+// FetchChats implements service.ChatService.
+func (c *connAdapter) FetchChats() {
 
-	jsonData := map[string]string{
+}
+
+// CreateChat implements service.ChatService.
+func (c *connAdapter) CreateChat(chatType int, name string) error {
+	url := c.baseURL
+	url.Path = "api/v1/chats"
+
+	jsonData := map[string]interface{}{
 		"name": name,
+		"type": chatType,
 	}
+
 	jsonDataBytes, err := json.Marshal(jsonData)
 	if err != nil {
 		return err
@@ -67,7 +74,7 @@ func (c *connAdapter) CreateChat(name string) error {
 // GetChats implements service.ChatService.
 func (c *connAdapter) GetChats() ([]*chatdomain.Chat, error) {
 	url := c.baseURL
-	url.Path = "/chats"
+	url.Path = "/api/v1/chats"
 
 	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
 	if err != nil {
@@ -130,7 +137,7 @@ func (c *connAdapter) Connect(ctx context.Context) error {
 				fmt.Println("try connect")
 				ws, connErr = websocket.Dial(wsURL.String(), "", "http://0.0.0.0:8181")
 				if connErr == nil {
-					return 
+					return
 				}
 			case <-ctx.Done():
 				return
@@ -144,7 +151,7 @@ func (c *connAdapter) Connect(ctx context.Context) error {
 }
 
 // ReceiveMessages implements service.ChatService.
-func (c *connAdapter) ReceiveMessages(chatID string) (<-chan *chatdomain.Message, error) {
+func (c *connAdapter) ReceiveMessages(chatID int64) (<-chan *chatdomain.Message, error) {
 	msgCh := make(chan *chatdomain.Message)
 	go func() {
 		defer close(msgCh)

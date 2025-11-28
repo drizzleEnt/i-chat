@@ -6,12 +6,13 @@ import (
 )
 
 type ChatService interface {
-	Connect(ctx context.Context) ( error)
+	Connect(ctx context.Context) error
 	Close() error
 	SendMessage(msg chatdomain.Message) error
-	ReceiveMessages(chatID string) (<-chan *chatdomain.Message, error)
+	ReceiveMessages(chatID int64) (<-chan *chatdomain.Message, error)
 	GetChats() ([]*chatdomain.Chat, error)
-	CreateChat(name string) error
+	CreateChat(chatType int, name string) error
+	FetchChats()
 }
 
 type AuthService interface {
