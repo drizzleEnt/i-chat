@@ -5,6 +5,9 @@ import (
 	"ichat/internal/service"
 	chatsrv "ichat/internal/service/chat"
 	"ichat/internal/ui"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type App struct {
@@ -18,6 +21,17 @@ func New() *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	// Setup signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
 	a.getUI().Start(ctx)
 	return nil
 }

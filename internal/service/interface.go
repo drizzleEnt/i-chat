@@ -5,6 +5,14 @@ import (
 	chatdomain "ichat/internal/domain/chat"
 )
 
+type ConnStatus int
+
+const (
+	StatusDisconnected ConnStatus = iota
+	StatusConnecting
+	StatusConnected
+)
+
 type ChatService interface {
 	Connect(ctx context.Context) error
 	Close() error
@@ -13,6 +21,8 @@ type ChatService interface {
 	GetChats() ([]*chatdomain.Chat, error)
 	CreateChat(chatType int, name string) error
 	FetchChats()
+	GetStatus() ConnStatus
+	IsConnected() bool
 }
 
 type AuthService interface {

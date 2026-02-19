@@ -6,19 +6,25 @@ import (
 	chatdomain "ichat/internal/domain/chat"
 	"ichat/internal/service"
 	"log"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 type Option func(*UI)
 
 type UI struct {
-	app fyne.App
-	srv service.ChatService
+	app      fyne.App
+	srv      service.ChatService
+	window   fyne.Window
+	ctx      context.Context
+	cancel   context.CancelFunc
+	statusMu sync.RWMutex
 }
 
 func WithChatService(srv service.ChatService) Option {
@@ -40,20 +46,60 @@ func New(opts ...Option) *UI {
 }
 
 func (a *UI) Start(ctx context.Context) {
-	myWindow := a.app.NewWindow("LIZZARD")
-	myWindow.CenterOnScreen()
-	myWindow.Resize(fyne.NewSize(800, 600))
-	a.showEnterScreen(myWindow)
+	a.ctx, a.cancel = context.WithCancel(ctx)
+	a.window = a.app.NewWindow("LIZZARD")
+	a.window.CenterOnScreen()
+	a.window.Resize(fyne.NewSize(800, 600))
 
-	err := a.srv.Connect(ctx)
+	// Start connection in background and show loading screen
+	a.showLoadingScreen(a.window)
+
+	// Start connection
+	err := a.srv.Connect(a.ctx)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Connection init error: %v", err)
 	}
 
-	myWindow.ShowAndRun()
+	// Watch connection status
+	go a.watchConnectionStatus()
+
+	a.window.ShowAndRun()
+}
+
+func (a *UI) watchConnectionStatus() {
+	lastStatus := service.StatusDisconnected
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		default:
+			status := a.srv.GetStatus()
+			if status != lastStatus {
+				lastStatus = status
+				a.updateConnectionStatus(status)
+			}
+		}
+	}
+}
+
+func (a *UI) updateConnectionStatus(status service.ConnStatus) {
+	fyne.Do(func() {
+		switch status {
+		case service.StatusConnected:
+			a.showLoginScreen(a.window)
+		case service.StatusDisconnected:
+			// Show error dialog if we were connected and now disconnected
+			if a.ctx.Err() == nil {
+				dialog.ShowError(fmt.Errorf("connection lost, attempting to reconnect..."), a.window)
+			}
+		}
+	})
 }
 
 func (a *UI) Close(w fyne.Window) {
+	if a.cancel != nil {
+		a.cancel()
+	}
 	a.srv.Close()
 	a.app.Quit()
 }
@@ -63,7 +109,21 @@ func (a *UI) showEnterScreen(w fyne.Window) {
 }
 
 func (a *UI) showLoadingScreen(w fyne.Window) {
+	progress := widget.NewProgressBarInfinite()
+	progress.Start()
 
+	statusLabel := widget.NewLabel("Connecting to server...")
+	statusLabel.Alignment = fyne.TextAlignCenter
+
+	icon := widget.NewIcon(theme.ContentClearIcon())
+
+	content := container.NewVBox(
+		container.NewCenter(icon),
+		container.NewCenter(statusLabel),
+		container.NewCenter(progress),
+	)
+
+	w.SetContent(content)
 }
 
 func (a *UI) showMainMenu(w fyne.Window) {
@@ -101,8 +161,11 @@ func (a *UI) showMainMenu(w fyne.Window) {
 
 func (a *UI) showLoginScreen(w fyne.Window) {
 	lgnLog := widget.NewEntry()
+	lgnLog.SetPlaceHolder("Username")
 	pswLog := widget.NewEntry()
+	pswLog.SetPlaceHolder("Password")
 	pswLog.Password = true
+
 	registerBtn := widget.NewButton("Register", func() {
 		a.showRegisterScreen(w)
 	})
@@ -236,7 +299,7 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 	}
 	err := a.srv.SendMessage(joinMsg)
 	if err != nil {
-		dialog.ShowInformation("Error", "Enter connecting chat", w)
+		dialog.ShowInformation("Error", "Error joining chat", w)
 		a.showChatsListScreen(w)
 		return
 	}
@@ -245,14 +308,28 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 	msgList := container.NewVBox()
 	// Example initial message
 	msgList.Add(widget.NewLabel("System: Welcome to the chat"))
+
+	msgCtx, msgCancel := context.WithCancel(a.ctx)
+	defer msgCancel()
+
+	msgCh, err := a.srv.ReceiveMessages(chat.ID)
+	if err != nil {
+		fmt.Printf("Error receiving messages: %v\n", err)
+	}
+
 	go func() {
-		msg, err := a.srv.ReceiveMessages(chat.ID)
-		if err != nil {
-			fmt.Printf("Error receiving messages: %v\n", err)
-			return
-		}
-		for msg := range msg {
-			msgList.Add(widget.NewLabel(fmt.Sprintf("%s: %s", msg.SenderID, msg.Content)))
+		for {
+			select {
+			case <-msgCtx.Done():
+				return
+			case msg, ok := <-msgCh:
+				if !ok {
+					return
+				}
+				fyne.Do(func() {
+					msgList.Add(widget.NewLabel(fmt.Sprintf("%s: %s", msg.SenderID, msg.Content)))
+				})
+			}
 		}
 	}()
 
@@ -271,10 +348,9 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 		}
 		err := a.srv.SendMessage(leaveMsg)
 		if err != nil {
-			dialog.ShowInformation("Error", "Enter connecting chat", w)
-			a.showChatsListScreen(w)
-			return
+			dialog.ShowInformation("Error", "Error leaving chat", w)
 		}
+		msgCancel()
 		a.showChatsListScreen(w)
 	})
 
@@ -308,12 +384,17 @@ func (a *UI) showChatScreen(w fyne.Window, chat *chatdomain.Chat) {
 		if a.srv != nil {
 			// non-blocking send; adjust per real service API
 			go func(t string) {
-				a.srv.SendMessage(chatdomain.Message{
+				err := a.srv.SendMessage(chatdomain.Message{
 					SenderID: "current_user_id", // replace with actual user ID
 					Content:  t,
 					ChatID:   chat.ID,
 					Action:   string(chatdomain.ActionSendText),
 				})
+				if err != nil {
+					fyne.Do(func() {
+						dialog.ShowInformation("Error", fmt.Sprintf("Failed to send: %v", err), w)
+					})
+				}
 			}(text)
 		}
 	}
